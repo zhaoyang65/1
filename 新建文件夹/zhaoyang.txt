@@ -1,0 +1,303 @@
+[uuu,vvv]=uigetfile({'*.jpg;*.tif;*.png;*.gif;*.BMP;*.JPEG','All Image Files'}  ,'MultiSelect',  'on');% 获取一张车牌照片
+path=strcat(vvv,uuu);%拼接图片路径 img_rgb=imread(path);
+imshow(img_rgb);title('原图'); %%  灰度化
+img_gray = rgb2gray(img_rgb); figure;
+subplot(1, 2, 1);
+imshow(img_gray); % title('灰度图像'); %%  均值滤波
+% img_gray = imnoise(img_gray,'salt & pepper',0.01); % figure;imshow(img_gray);
+A=fspecial('average',3);
+img_gray=filter2(A,img_gray)/255;                            %A 是滤波器，用生成的高斯序列进行滤波
+figure;
+imshow(img_gray); title('均值滤波');
+img_edge = edge(img_gray, 'sobel',0.08,'vertical');
+% img_edge = edge(img_gray, 'sobel', 0.1, 'vertical');
+% figure('name','边缘检测');imshow(img_edge);title('sobel 算子边缘检测');
+se1 = strel('rectangle',[35,18]);
+se1 = strel('rectangle',[30,18]);
+bw_close=imclose(img_edge,se1);
+figure;imshow(bw_close);title('闭操作'); se2 = strel('rectangle',[21,19]);
+bw_open = imopen(bw_close, se2);
+figure;imshow(bw_open);title('开操作');
+bw_close = bwareaopen(bw_open,2500);    %  移除小对象 figure;imshow(bw_close);title('去除噪声');
+se3 = strel('rectangle',[25,17]);
+bw_dilate = imdilate(bw_close,se3);
+figure;imshow(bw_dilate);title('膨胀操作');
+imshow(img_close);
+title('平滑图像的轮廓'); se=[1 1;1 1];
+img b  imr = imerode(img_close, se);
+figure('name','图像腐蚀'); imshow(img b  imr);
+title('图像腐蚀后的图像');
+img_gray = rgb2gray(flag_blue);        % RGB 图像转灰度图像 % figure;imshow(img_gray);title('灰度图像');
+thresh = graythresh(img_gray);          %自动确定二值化阈值；
+bw_b = im2bw(img_gray,thresh);              %对图像自动二值化即可。
+figure('name','二值化');imshow(bw_b);
+img_lp = img_rgb(img_Y1:img_Y2, img_X1:img_X2, :); % figure('name', '定位剪切图像');
+ratio_lp = size(img_lp,2)/size(img_lp,1); % if ratio_lp < 3
+%          img_X1 = img_X2 - 3*size(img_lp,1);
+%          img_lp = img_rgb(img_Y1:img_Y2, img_X1:img_X2, :); %          ratio_lp = size(img_lp,2)/size(img_lp,1);
+% end
+figure(2);imshow(img_lp);
+% title('定位剪切后的彩色车牌图像')
+title(ratio_lp);
+plate_projection_v = sum(I4,1);%列
+figure;
+stem(plate_projection_v,'.',...
+ 'MarkerFaceColor','w',...
+ 'MarkerEdgeColor','w');
+title('投影去左右');
+chara_start = [];
+chara_end = [];
+plate_projection_v = [0,plate_projection_v,0];
+for i = 1 : length(plate_projection_v)-1
+ if plate_projection_v(1,i)<=2 & plate_projection_v(1,i+1)>2
+ chara_start = [chara_start,i];
+ elseif plate_projection_v(1,i)>2 & plate_projection_v(1,i+1)<=2
+ chara_end = [chara_end,i];
+ end
+end
+interval_len = chara_start(2:end) - chara_end(1:end-1);
+[aa1, aa2] = max(interval_len);
+chara_wide = mean(chara_len(aa2:aa2+5));
+province_start = chara_start(aa2-1);
+for i = aa2:-1:1
+ if chara_end(aa2-1) - chara_start(i) >= chara_wide
+ province_start = chara_start(i);
+ break;
+ end
+end
+if chara_end(aa2-1) - province_start < chara_wide
+ province_start = 1;
+end
+chara_loc = [[province_start,chara_start(aa2:aa2+5)-1];chara_end(aa2-1:aa2+5)-1];
+plate.cola = chara_loc(1,1);
+plate.colb = chara_loc(2,end);
+I5 = I4(:,plate.cola:plate.colb);
+figure;%subplot(337);
+imshow(I5);title('去除左右边框');
+I6 = I5;
+[height, Twidth] = size(I6);
+Cwidth = Twidth*45/409; % 单一字符宽度
+Cspace = Twidth*12/409; % 字符间距
+SecThspace = Twidth*34/409; % 第二个和第三个字符间距
+projection = sum(I6, 1);
+figure;%subplot(339);
+stem(projection,'.',...
+ 'MarkerFaceColor','w',...
+ 'MarkerEdgeColor','w');
+title('7 个字符垂直方向投影');
+character_start = chara_loc(1,:) - chara_loc(1,1) + 1;
+character_end = chara_loc(2,:) - chara_loc(1,1) + 1;
+character_len = character_end - character_start;
+if max(character_len) > Cwidth
+ Cwidth = max(character_len);
+end
+ 
+for i = 1:7
+ if i == 1
+ if character_len(1) < Cwidth
+ character_end(1) = ceil(Cwidth)+1;
+ end
+ elseif i == 7
+ if character_len(7) < Cwidth
+ character_start(7) = character_end(7)-ceil(Cwidth);
+ end
+ else
+ if character_len(i) < Cwidth
+ character_start(i) = character_start(i) - floor((Cwidth - character_len(i))/2);
+ character_end(i) = character_end(i) + ceil((Cwidth - character_len(i))/2);
+ end
+ end 
+end
+character_im = {};
+figure;
+for i = 1 : 7
+ % 切出当前字符
+ fprintf('第%d 字符起始列的大概位置:%d \n',i,character_start(i));
+ character = I6(:,character_start(i):character_end(i));
+ subplot(1,7,i);imshow(character);%显示字符图像
+% 保存当前字符
+ x=ceil(height*1/8);
+ character_expand_0=double(zeros(height,x));
+% character_expand=[character_expand_0,character,character_expand_0];
+ % imshow(character_expand);
+ character_expand=imresize(character,[32 16]);
+% character_expand=imresize(character_expand,[32 16]);
+% character_expand=imresize(character_expand,[40 32]);
+ subplot(1,7,i);
+ imshow(character_expand);%显示字符图像
+ PIN(:,:,i)=character_expand;
+ 
+ character_expand=normalize_lzb(double(character_expand));%正规化
+ 
+ a = num2str(i);
+ filename = strcat(a,'.bmp');
+ imwrite(character_expand,filename,'bmp');
+ character_im = [character_im,character_expand];
+end
+LP_word=PIN;
+LP_word = normalize_lzb(double(LP_word));%正规化
+%去除车牌以外的区域
+function I=remove_extra_region(I2)
+projection_h = sum(I2,1);%列求和
+figure;
+stem(projection_h,'.',...
+ 'MarkerFaceColor','w',...
+ 'MarkerEdgeColor','w');
+title('垂直方向投影');
+projection_v = sum(I2,2);
+figure;
+stem(projection_v,'.',...
+ 'MarkerFaceColor','w',...
+ 'MarkerEdgeColor','w');
+title('水平方向投影');
+for i=1:size(projection_v,1)
+ if projection_v(i,1) >= 1
+ new.rowa = i;
+ break;
+ end
+end
+for i=1:size(projection_v,1)
+ j = size(projection_v,1) - i+1;
+ if projection_v(j,1) >= 1
+ new.rowb = j;
+ break;
+ end
+end
+for i=1:size(projection_h ,2)
+ if projection_h(1,i) >= 1
+ new.cola = i;
+ break;
+ end
+end
+for i=1:size(projection_h ,2)
+ j = size(projection_h ,2)-i+1;
+ if projection_h(1,j) >= 1
+ new.colb = j;
+ break;
+end
+end
+I = I2(new.rowa:new.rowb, new.cola:new.colb);
+end
+function [Y] = normalize_lzb(X)
+% 输入图片归一化到[0 1],double 型
+if ndims(X)==3
+ L = size(X,3);
+ Y = zeros(size(X));
+ for K = 1:L
+ Y(:,:,K) = subfun(X(:,:,K));
+ end
+elseif ndims(X)<3
+ Y = subfun(X);
+else
+ Y = X;
+end
+end
+%%
+function [Y] = subfun(X)
+% 输入图片归一化到[0 1], double 型
+minX = min(X(:));
+maxX = max(X(:));
+if maxX>minX
+ Y = (X-minX)./(maxX-minX);
+else
+ Y = zeros(size(X));
+end
+end
+
+
+
+clear all;close all;clc
+zifumuban = {'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F','G','H',...
+ 'J','K','L','M','N','P','Q','R','S','T','U','V','W','X','Y','Z',...
+ '京','闽','粤','苏','沪','浙','皖','津','渝','冀','晋','蒙','辽','吉',...
+ '黑','赣','鲁','豫','鄂','湘','桂','琼','川','贵','云','藏','陕','甘','青','宁','新',};
+%% 导入模板
+% path=uigetdir('','Please choose the folder mat files in:');
+
+path = 'E:\work\模板库';
+allnames=dir(fullfile(path,'\*.bmp')); %选择以文件名中所有 bmp 格式的图片文件
+muban = [];
+for i=1:length(allnames)
+ Data_Path=fullfile(path,allnames(i).name)
+ xx1 = imread(Data_Path);
+ xx2 = im2bw(xx1);
+ muban(:,:,i) = xx2;
+% imshow(muban(:,:,i));
+% figure(1);
+ subplot(6,11,i);imshow(muban(:,:,i));title(zifumuban{i});
+end
+%% 导入分割后的字符数据
+load('character.mat')
+figure;
+for i = 1:7
+ subplot(1,7,i);imshow(character_im{i});
+end
+%% 模板匹配 1 逐像素先减，绝对值求和
+carplate_recog = {};
+for i = 1:7
+ zifu = character_im{i};
+ switch i
+ case 1
+ ppresult = [];
+ xx1 = [];
+ for j = 35:65
+ ppresult1 = abs(zifu - muban(:,:,j));
+ figure(3);
+ subplot(5,7,j-34);imshow(ppresult1);
+ xx1 = [xx1,sum(sum(ppresult1))];
+ppresult = [ppresult,xx1(j-34)];
+ title(xx1(j-34));
+ end
+ [a,b] = min(xx1);
+ carplate_recog(i) = zifumuban(b+34);
+ case {2,3,4,5,6,7}
+ ppresult = [];
+ xx1 = [];
+ for j = 1:34
+ ppresult1 = abs(zifu - muban(:,:,j));
+ figure(i+2);
+ subplot(5,7,j);imshow(ppresult1);
+ xx1 = [xx1,sum(sum(ppresult1))];
+ ppresult = [ppresult,xx1(j)];
+ title(xx1(j));
+ end
+ [a,b] = min(xx1);
+ carplate_recog(i) = zifumuban(b);
+ end
+end
+%% 模板匹配 2 计算相关系数
+carplate_recog1 = {};
+for i = 1:7
+ zifu = character_im{i};
+ switch i
+ case 1
+ ppresult = [];
+ xx1 = [];
+ for j = 35:65
+ ppresult1 = corr2(zifu , muban(:,:,j));
+ xx1 = [xx1,ppresult1];
+ ppresult = [ppresult,xx1(j-34)];
+end
+ disp('第一个字符与模板的相关结果为：');
+ disp(xx1);
+ [a,b] = max(xx1);
+ carplate_recog1(i) = zifumuban(b+34);
+ case {2,3,4,5,6,7}
+ ppresult = [];
+ xx1 = [];
+ for j = 1:34
+ ppresult1 = corr2(zifu , muban(:,:,j));
+ xx1 = [xx1,ppresult1];
+ ppresult = [ppresult,xx1(j)];
+ end
+ disp(['第',num2str(i),'个字符与模板的相关结果为：'])
+ xx1
+ [a,b] = max(xx1);
+ carplate_recog1(i) = zifumuban(b);
+ end
+end
+%%显示结果
+disp('通过与模板直接相减得到的识别结果为：');
+disp(carplate_recog);
+disp('通过与模板计算相关得到的识别结果为：');
+disp(carplate_recog1);
